@@ -63,7 +63,11 @@ export default function Home() {
 
     } catch (err: unknown) {
       console.error(err);
-      const errorMessage = err instanceof Error ? err.message : "Failed to connect to BAD CORE Server.";
+      // Jika error adalah TypeError (biasanya network error/offline)
+      const isNetworkError = err instanceof TypeError;
+      const errorMessage = isNetworkError
+        ? "📡 Connection Failed. The backend may be waking up (Render free tier) or you are offline. Please try again in a few seconds."
+        : err instanceof Error ? err.message : "An unexpected error occurred.";
       setError(errorMessage);
     } finally {
       setLoading(false);
