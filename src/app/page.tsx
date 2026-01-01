@@ -71,11 +71,12 @@ export default function Home() {
         throw new Error('⏱️ Backend took too long to respond (2 minutes timeout). Please try again later.');
       }
 
-      const elapsed = Date.now() - startTime;
-      if (elapsed < HEALTH_TIMEOUT) {
+      // If it's a network error (TypeError) or couldn't reach the server
+      if (err instanceof TypeError) {
         throw new Error('📡 Cannot connect to backend. Please check your connection or try again.');
       }
 
+      // Preserve specific error if we threw it manually (like "Backend health check failed")
       throw err;
     }
   };
