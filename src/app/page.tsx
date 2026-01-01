@@ -56,11 +56,8 @@ export default function Home() {
       clearTimeout(wakeUpTimer);
 
       if (res.ok) {
-        const data = await res.json();
-        if (data.status === 'healthy') {
-          setLoadingMessage('✅ Backend ready! Processing your document...');
-          return true;
-        }
+        setLoadingMessage('✅ Backend ready! Processing your document...');
+        return true;
       }
 
       throw new Error('Backend health check failed');
