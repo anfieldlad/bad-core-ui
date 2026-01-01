@@ -15,17 +15,68 @@ const parseMarkdownJson = (markdown: string) => {
 export default function Home() {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
+  const [loadingMessage, setLoadingMessage] = useState<string>('');
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState<string>('');
 
   // Mengambil URL dari .env.local
   const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+  const API_KEY = process.env.NEXT_PUBLIC_API_KEY || 'your_secret_api_key';
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setFile(e.target.files[0]);
       setError('');     // Reset error saat pilih file baru
       setResult(null);  // Reset hasil sebelumnya
+    }
+  };
+
+  // Health check with Render free tier wake-up handling
+  const checkBackendHealth = async (): Promise<boolean> => {
+    const HEALTH_TIMEOUT = 120000; // 120 seconds (2 minutes) max wait
+    const startTime = Date.now();
+
+    setLoadingMessage('🔌 Checking backend connection...');
+
+    // Start a timer to update message after 5 seconds
+    const wakeUpTimer = setTimeout(() => {
+      setLoadingMessage('☕ Backend is waking up (Render Free Tier)... Please wait up to 1 minute.');
+    }, 5000);
+
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), HEALTH_TIMEOUT);
+
+      const res = await fetch(`${API_URL}/`, {
+        method: 'GET',
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+      clearTimeout(wakeUpTimer);
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.status === 'healthy') {
+          setLoadingMessage('✅ Backend ready! Processing your document...');
+          return true;
+        }
+      }
+
+      throw new Error('Backend health check failed');
+    } catch (err: unknown) {
+      clearTimeout(wakeUpTimer);
+
+      if (err instanceof Error && err.name === 'AbortError') {
+        throw new Error('⏱️ Backend took too long to respond (2 minutes timeout). Please try again later.');
+      }
+
+      const elapsed = Date.now() - startTime;
+      if (elapsed < HEALTH_TIMEOUT) {
+        throw new Error('📡 Cannot connect to backend. Please check your connection or try again.');
+      }
+
+      throw err;
     }
   };
 
@@ -37,14 +88,23 @@ export default function Home() {
 
     setLoading(true);
     setError('');
-
-    const formData = new FormData();
-    formData.append('file', file);
+    setLoadingMessage('');
 
     try {
-      // Panggil Endpoint Backend
+      // Step 1: Health check first
+      await checkBackendHealth();
+
+      // Step 2: Proceed with extraction
+      setLoadingMessage('🧠 Extracting data with AI...');
+
+      const formData = new FormData();
+      formData.append('file', file);
+
       const res = await fetch(`${API_URL}/extract`, {
         method: 'POST',
+        headers: {
+          'X-API-Key': API_KEY,
+        },
         body: formData,
       });
 
@@ -63,14 +123,11 @@ export default function Home() {
 
     } catch (err: unknown) {
       console.error(err);
-      // Jika error adalah TypeError (biasanya network error/offline)
-      const isNetworkError = err instanceof TypeError;
-      const errorMessage = isNetworkError
-        ? "📡 Connection Failed. The backend may be waking up (Render free tier) or you are offline. Please try again in a few seconds."
-        : err instanceof Error ? err.message : "An unexpected error occurred.";
+      const errorMessage = err instanceof Error ? err.message : "An unexpected error occurred.";
       setError(errorMessage);
     } finally {
       setLoading(false);
+      setLoadingMessage('');
     }
   };
 
@@ -140,7 +197,7 @@ export default function Home() {
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
-                Processing Intelligence...
+                <span className="text-sm">{loadingMessage || 'Processing...'}</span>
               </span>
             ) : (
               'Extract Data'
